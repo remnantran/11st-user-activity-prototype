@@ -37,16 +37,45 @@
     box-shadow:0 0 0 10px #1b1b1d,0 0 0 11px #3a3a3d,0 30px 60px rgba(0,0,0,.18);transform-origin:center center}
   .screen{position:absolute;inset:0;background:#fff;will-change:transform}
   .screen img{display:block;width:375px;height:auto;user-select:none;-webkit-user-drag:none}
-  .hs{position:absolute;cursor:pointer;-webkit-tap-highlight-color:transparent}
-  /* 클릭 유도 표시: 무채색, 은은하게 */
-  .hs .ring{position:absolute;inset:0;border-radius:999px;
-    background:rgba(40,40,40,.07);box-shadow:inset 0 0 0 1.5px rgba(40,40,40,.32);
-    opacity:0;transition:opacity .3s}
-  .hs .ring::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:0 0 0 1.5px rgba(40,40,40,.22);
-    animation:pulse 1.8s ease-out infinite}
-  @keyframes pulse{0%{transform:scale(1);opacity:.9}100%{transform:scale(1.18);opacity:0}}
-  .show-hints .hs.hint .ring{opacity:1}
-  .hs:active .ring{background:rgba(40,40,40,.14)}
+  .hs{position:absolute;cursor:pointer;-webkit-tap-highlight-color:transparent;z-index:3}
+  .scroller{position:absolute;left:0;top:0;width:375px;height:867px;overflow-y:auto;overflow-x:hidden;
+    scrollbar-width:none;overscroll-behavior:contain;cursor:grab;z-index:1}
+  .scroller:active{cursor:grabbing}
+  .scroller::-webkit-scrollbar{display:none}
+  .track{position:relative;width:375px}
+  .track img{position:absolute;left:0;width:375px}
+  .cutbox{position:absolute;left:0;width:375px;overflow:hidden}
+  .ovl{position:absolute;left:0;width:375px;pointer-events:none;z-index:2}
+  .sticky{position:absolute;left:0;width:375px;z-index:2;pointer-events:none;will-change:transform}
+  .sticky img{display:block;width:435px;height:50px}
+  .tabs-x{width:375px;height:50px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;pointer-events:auto;cursor:grab}
+  .tabs-x::-webkit-scrollbar{display:none}
+  .tabs-in{position:relative;width:451px;height:50px}
+  .sticky .hs{pointer-events:auto}
+  /* 홈 → PDP 공유 전환 */
+  .hero{position:absolute;z-index:20;overflow:hidden;pointer-events:none;background:#f2f3f5}
+  .hero img{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .tg{position:absolute;left:0;top:44px;width:375px;height:56px;z-index:21;pointer-events:none;overflow:hidden}
+  .tg .bg{position:absolute;inset:0;background-size:375px 56px;background-repeat:no-repeat}
+  .tr-mask{position:absolute;background:#fff;z-index:1}
+  /* 마이 펼침: GNB 모핑 레이어 */
+  .gm{position:absolute;left:0;top:44px;width:313px;height:56px;z-index:4;pointer-events:none;
+    background:url(img/hd/gm_bg.png) 0 0/375px 56px no-repeat}
+  .gm-p{position:absolute;top:6px;height:44px;border-radius:22px;overflow:hidden;
+    background:rgba(255,255,255,.8);box-shadow:0 1px 5px rgba(0,0,0,.05),0 0 1px rgba(0,0,0,.15)}
+  .gm-p img{position:absolute;display:block}
+  .top-fade{position:absolute;left:0;top:0;width:375px;height:104px;z-index:2;pointer-events:none;
+    background:linear-gradient(#fff 0,#fff 44px,rgba(255,255,255,.85) 70px,rgba(255,255,255,0) 104px)}
+  /* 클릭 유도 표시: Figma 250:15978 — 클릭 영역 가운데 정원(버튼 기준 90px),
+     검정 10% 채우기 + 검정 10% 1px 안쪽 선, 애니메이션 없음. 크기는 JS에서 지정 */
+  .hs .ring{position:absolute;left:50%;top:50%;border-radius:50%;transform:translate(-50%,-50%);
+    background:rgba(0,0,0,.1);box-shadow:inset 0 0 0 1px rgba(0,0,0,.1);
+    pointer-events:none;opacity:0;transition:opacity .3s}
+  /* 누르기 전까지 은은하게 깜빡, 누르면 사라짐 */
+  .show-hints .hs.hint .ring{opacity:1;animation:blink 1.4s ease-in-out infinite}
+  .hs.seen .ring{opacity:0 !important;animation:none !important}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.15}}
+  .hs:active .ring{background:rgba(0,0,0,.16)}
 
   /* transitions */
   .enter-push{animation:pushIn .38s cubic-bezier(.32,.72,0,1) both}
@@ -98,7 +127,9 @@ const SCREENS = {
   home:        {img:'home',        title:'홈'},
   home_my:     {img:'home_my',     title:'홈 · 상단 멤버십 마이'},
   home_coupon: {img:'home_coupon', title:'홈 · 쿠폰 사용 전인 유저'},
+  home_coupon_my: {img:'home_coupon', title:'홈 · 쿠폰 사용 전 · 멤버십 마이'},
   home_active: {img:'home_active', title:'홈 · 활동성 높은 유저'},
+  home_active_my: {img:'home_active', title:'홈 · 활동성 높은 유저 · 멤버십 마이'},
   pdp:         {img:'pdp',         title:'PDP'},
   pdp_price:   {img:'pdp_price',   title:'PDP · 가격 펼침'},
   order:       {img:'order',       title:'주문 결제', modal:true},
@@ -108,43 +139,118 @@ const SCREENS = {
   search:      {img:'search',      title:'검색'},
   mart:        {img:'mart',        title:'마트'},
 };
-const HOME_STATES = ['home','home_my','home_coupon','home_active'];
+const HOME_STATES = ['home','home_my','home_coupon','home_coupon_my','home_active','home_active_my'];
+
+/* 스크롤 화면 구성 (y = 스크롤 0일 때 화면 좌표)
+   top: 고정 GNB, items: 스크롤 콘텐츠, bot: 고정 하단(탭바·구매바), init: 처음 스크롤 위치 */
+const V = '?v=14'; // 이미지 바꿀 때 숫자 올리기 (브라우저 캐시 무효화)
+const SC = 'img/hd/'; // 모든 이미지는 2x(레티나) — 화면에는 375 폭으로 표시
+// 홈: 상태바만 고정, 네비(검색·프로필·장바구니)는 스크롤과 함께 올라가고, 탭은 상단(44)에 스티키(배경 없음)
+const homeLayout = (n, items) => ({
+  // 홈 콘텐츠는 LIVE11 직전(콘텐츠 y1393)까지만 보이게
+  top:{src:SC+'status_clear.png'}, items:[{src:SC+n+'_head.png', y:0}, ...items.map(it=>/_c\.png$/.test(it.src) ? {...it, cut:1393} : it)], pad:110, // 상태바 배경 없음(글자만)
+  sticky:{src:SC+'home_tabs.png', y:104, stick:44, h:50},
+  bot:{src:SC+'tab_home.png', y:693}, toTop:756,
+});
+const SCROLL = {
+  home:        homeLayout('home',        [{src:SC+'home_c.png', y:152}]),
+  home_my:     homeLayout('home_my',     [{src:SC+'home_my_c.png', y:152}]),
+  home_coupon: homeLayout('home_coupon', [{src:SC+'home_coupon_bar.png', y:152},{src:SC+'home_coupon_c.png', y:392}]),
+  // 쿠폰 사용 전 홈 + 상단 멤버십 마이 GNB
+  home_coupon_my: homeLayout('home_my', [{src:SC+'home_coupon_bar.png', y:152},{src:SC+'home_coupon_c.png', y:392}]),
+  home_active: homeLayout('home_active', [{src:SC+'home_active_bar.png', y:152},{src:SC+'home_active_c.png', y:260}]),
+  home_active_my: homeLayout('home_my', [{src:SC+'home_active_bar.png', y:152},{src:SC+'home_active_c.png', y:260}]),
+  // 검색: 네비·필터는 고정이지만 배경 없이(뒤로 스크롤되는 콘텐츠가 보이게), 배경색은 콘텐츠 맨 위에
+  search:      {top:{src:SC+'search_ovl.png'}, items:[{src:SC+'search_bg.png', y:0},{src:SC+'search_c.png', y:156}], pad:110, bot:{src:SC+'tab_home.png', y:693}, toTop:756},
+  pdp:         {top:{src:SC+'pdp_top.png'}, items:[{src:SC+'pdp_c.png', y:102}], pad:100, bot:{src:SC+'tab_pdp.png', y:702}, toTop:765},
+  pdp_price:   {top:{src:SC+'pdp_price_top.png'}, items:[{src:SC+'pdp_price_c.png', y:102}], pad:100, bot:{src:SC+'tab_pdp.png', y:702}, toTop:765},
+  // 주문 결제: 시안은 콘텐츠가 156만큼 올라간 상태 → 처음 스크롤 156
+  order:       {top:{src:SC+'gnb_order.png', fade:true}, items:[{src:SC+'order_c.png', y:102}], pad:110, bot:{src:SC+'tab_order.png', y:507}, toTop:570, init:156, h:682},
+};
 
 // 홈 공통 탭(멤버십전용·마트+)은 클릭 가능, 유도 표시는 각 화면의 주요 다음 단계에만
+// 탭 화면(멤버십 전용·마트) = 홈의 탭 전환: GNB·탭은 홈과 똑같이(마이 펼침 상태도 유지), 아래 콘텐츠만 바뀜
+const TAB_IDS = ['membership','mart'];
+const TAB_DEF = {
+  membership: {tabs:'membership_tabs.png', items:[{src:SC+'membership_c.png', y:152, cut:948}], bot:'tab_home.png'}, // LIVE11(y948) 위까지만
+  mart:       {tabs:'mart_tabs.png',       items:[{src:SC+'mart_c.png', y:152}],                 bot:'tab_mart.png'}, // 하단 '하나 더 담으면' 플로팅 포함
+};
+TAB_IDS.forEach(id=>Object.defineProperty(SCROLL, id, {get(){
+  const n = homeState.endsWith('_my') ? 'home_my' : 'home', D = TAB_DEF[id];
+  return {top:{src:SC+'status_clear.png'}, items:[{src:SC+n+'_head.png', y:0}, ...D.items], pad:110,
+    sticky:{src:SC+D.tabs, y:104, stick:44, h:50}, bot:{src:SC+D.bot, y:693}, toTop:756};
+}}));
+// 홈 검색바(마이 펼침 땐 왼쪽 돋보기 원) → 검색
+const homeSearch   = {x:80,y:50,w:174,h:44, to:'search', hint:true, scroll:true, ringSize:45};
+const homeLogo     = {x:16,y:50,w:64,h:44, logo:true, scroll:true}; // 검색바 안 11번가 로고 → 홈
+const homeSearchMy = {x:16,y:50,w:44,h:44,  to:'search', hint:true, scroll:true, ringSize:45};
 const homeTabs = [
-  {x:212,y:110,w:80,h:34, to:'membership'},
-  {x:300,y:110,w:52,h:34, to:'mart'},
+  {x:212,y:110,w:80,h:34, tabTo:'membership', tab:true, hint:true, ringSize:45},
+  {x:300,y:110,w:52,h:34, tabTo:'mart', tab:true},
+];
+// 탭 화면 GNB: 홈과 같은 검색·로고·프로필(마이 펼침), 탭 줄 좌표는 선택 탭에 따라 다름
+const avatarTab = {x:262,y:49,w:44,h:44, morphTab:true, hint:true, scroll:true, ringSize:50};
+const myPillTab = {x:68,y:50,w:242,h:42, morphTab:true, scroll:true};
+const hasMy = ()=> /^home(_coupon|_active)?(_my)?$/.test(homeState);
+const tabGnb = ()=> homeState.endsWith('_my') ? [homeSearchMy, myPillTab] : [homeSearch, homeLogo, ...(hasMy()?[avatarTab]:[])];
+const TAB_HS = {
+  membership: [{x:12,y:110,w:44,h:34, tabTo:'home', tab:true}, {x:301,y:110,w:56,h:34, tabTo:'mart', tab:true}],
+  mart:       [{x:12,y:110,w:44,h:34, tabTo:'home', tab:true}, {x:198,y:110,w:85,h:34, tabTo:'membership', tab:true}],
+};
+const couponProduct = {x:28,y:292,w:320,h:86, to:'pdp', hint:true, scroll:true, ringSize:45}; // 유도 원은 모듈 가운데, 45px // 두 홈 상태가 같은 객체 → 유도 표시 본 여부 공유
+const activeTabs = [
+  {x:212,y:110,w:80,h:34, tabTo:'membership', hint:true, tab:true, ringSize:45},
+  {x:300,y:110,w:52,h:34, tabTo:'mart', hint:true, tab:true, ringSize:45},
 ];
 const HOTSPOTS = {
   home: [
-    {x:262,y:49,w:44,h:44, to:'home_my', hint:true, swap:true},
+    homeSearch, homeLogo,
+    {x:262,y:49,w:44,h:44, to:'home_my', hint:true, morph:true, scroll:true, ringSize:50},
     ...homeTabs,
   ],
   home_my: [
-    {x:68,y:50,w:242,h:42, to:'home', swap:true},
+    homeSearchMy,
+    {x:68,y:50,w:242,h:42, to:'home', morph:true, scroll:true},
     ...homeTabs,
   ],
   home_coupon: [
-    {x:28,y:292,w:320,h:86, to:'pdp', hint:true},
+    homeSearch, homeLogo,
+    {x:262,y:49,w:44,h:44, to:'home_coupon_my', hint:true, morph:true, scroll:true, ringSize:50},
+    couponProduct,
     ...homeTabs,
   ],
+  home_coupon_my: [
+    homeSearchMy,
+    {x:68,y:50,w:242,h:42, to:'home_coupon', morph:true, scroll:true},
+    couponProduct,
+    ...homeTabs,
+  ],
+  // 활동성 높은 유저: 쿠폰 사용전 유저 홈과 같은 네비 UX (검색·로고·프로필 펼침), 탭 유도 원은 45px로 탭 줄 안에
   home_active: [
-    {x:212,y:110,w:80,h:34, to:'membership', hint:true},
-    {x:300,y:110,w:52,h:34, to:'mart', hint:true},
+    homeSearch, homeLogo,
+    {x:262,y:49,w:44,h:44, to:'home_active_my', hint:true, morph:true, scroll:true, ringSize:50},
+    ...activeTabs,
+  ],
+  home_active_my: [
+    homeSearchMy,
+    {x:68,y:50,w:242,h:42, to:'home_active', morph:true, scroll:true},
+    ...activeTabs,
   ],
   pdp: [
     {x:16,y:49,w:44,h:44, back:true},
-    {x:166,y:582,w:22,h:22, to:'pdp_price', hint:true, swap:true},
+    {x:72,y:50,w:52,h:44, logo:true}, // PDP 로고 알약의 11번가 로고 → 홈
+    {x:166,y:579,w:22,h:22, to:'pdp_price', hint:true, swap:true, scroll:true},
     {x:222,y:801,w:132,h:50, to:'order', hint:true},
   ],
   pdp_price: [
     {x:16,y:49,w:44,h:44, back:true},
-    {x:164,y:582,w:22,h:22, to:'pdp', swap:true},
+    {x:72,y:50,w:52,h:44, logo:true}, // PDP 로고 알약의 11번가 로고 → 홈
+    {x:164,y:579,w:22,h:22, to:'pdp', swap:true, scroll:true},
     {x:222,y:801,w:132,h:50, to:'order', hint:true},
   ],
   order: [
     {x:315,y:50,w:44,h:44, back:true},
-    {x:252,y:180,w:92,h:36, to:'coupon', hint:true},
+    {x:252,y:180,w:92,h:36, to:'coupon', hint:true, scroll:true},
     {x:16,y:612,w:343,h:60, to:'done', hint:true},
   ],
   coupon: [
@@ -154,46 +260,199 @@ const HOTSPOTS = {
   done: [
     {x:315,y:50,w:44,h:44, home:true, hint:true},
   ],
-  membership: [
-    {x:12,y:110,w:44,h:34, back:true},
-    {x:210,y:50,w:42,h:42, to:'search', hint:true},
-    {x:300,y:110,w:56,h:34, to:'mart'},
-  ],
+  get membership(){ return [...tabGnb(), ...TAB_HS.membership]; },
+  get mart(){ return [...tabGnb(), ...TAB_HS.mart]; },
   search: [
     {x:15,y:49,w:44,h:44, back:true, hint:true},
-  ],
-  mart: [
-    {x:144,y:110,w:82,h:34, to:'membership'},
   ],
 };
 
 const phone = document.getElementById('phone');
-let stack = ['home'];
-let homeState = 'home';
+let stack = ['home_coupon'];
+let homeState = 'home_coupon';
 let busy = false;
 
 // preload
-Object.values(SCREENS).forEach(s=>{const i=new Image();i.src=`img/1x/${s.img}.png`;});
+Object.entries(SCREENS).forEach(([id,s])=>{
+  const L=SCROLL[id]; const srcs = L ? [L.top.src, L.bot.src, ...L.items.map(i=>i.src)] : [`${SC}${s.img}.png`];
+  srcs.forEach(src=>{const i=new Image();i.src=src+V;});
+});
+['gm_bg','gm_logo','gm_search','gm_avatar','gm_mytext','tr_thumb','tr_hero','tr_back','tr_pill','tr_bg','tr_cart','tr_status','home_tabs','membership_tabs','mart_tabs','tab_mart'].forEach(n=>{const i=new Image();i.src=SC+n+'.png'+V;
+});
 
-function build(id){
-  const s = SCREENS[id];
+const seenHints = new WeakSet(); // 한 번 누른 유도 표시는 다시 안 보임 (새로고침 전까지)
+function hotspot(h, offset=0){
+  const b = document.createElement('div');
+  b.className = 'hs' + (h.hint ? ' hint' : ''); // 화면에 들어올 때마다 다시 보임
+  Object.assign(b.style,{left:h.x+'px',top:(h.y+offset)+'px',width:h.w+'px',height:h.h+'px'});
+  // 원 지름: 버튼·넓은 영역은 Figma처럼 90, 작은 아이콘은 영역보다 조금 크게
+  const d = h.ringSize || Math.min(90, Math.max(h.w, h.h) + 16); // ringSize로 개별 지정
+  // ring: {cx,cy} 화면 좌표를 주면 그 위치에 원 (없으면 영역 가운데)
+  const pos = h.ring ? `left:${h.ring.cx-h.x}px;top:${h.ring.cy-h.y}px;` : '';
+  b.innerHTML = `<span class="ring" style="${pos}width:${d}px;height:${d}px"></span>`;
+  b.addEventListener('click',e=>{ if(dragMoved) return; if(h.hint){ b.classList.add('seen'); } act(h, b); });
+  return b;
+}
+
+function build(id, scrollTop){
+  const s = SCREENS[id], L = SCROLL[id];
   const el = document.createElement('div');
   el.className = 'screen'; el.dataset.id = id;
-  el.innerHTML = `<img src="img/1x/${s.img}.png" alt="${s.title}">`;
-  (HOTSPOTS[id]||[]).forEach(h=>{
-    const b = document.createElement('div');
-    b.className = 'hs' + (h.hint?' hint':'');
-    Object.assign(b.style,{left:h.x+'px',top:h.y+'px',width:h.w+'px',height:h.h+'px'});
-    b.innerHTML = '<span class="ring"></span>';
-    b.addEventListener('click',()=>act(h));
-    el.appendChild(b);
+  if(!L){
+    el.innerHTML = `<img src="${SC}${s.img}.png${V}" alt="${s.title}">`;
+    (HOTSPOTS[id]||[]).forEach(h=>el.appendChild(hotspot(h)));
+    return el;
+  }
+  const init = L.init||0;
+  const last = L.items[L.items.length-1];
+  const sc = document.createElement('div'); sc.className='scroller';
+  if(L.h) sc.style.height = L.h+'px';
+  const track = document.createElement('div'); track.className='track';
+  sc.appendChild(track);
+  let bottom = 0;
+  L.items.forEach(it=>{
+    const im = new Image(); im.src = it.src+V; im.style.top = it.y+'px'; im.alt='';
+    if(it.cut){ // 지정 높이에서 이미지를 잘라 그 아래 모듈은 안 보이게
+      const box = document.createElement('div'); box.className='cutbox';
+      Object.assign(box.style,{top:it.y+'px', height:it.cut+'px'}); im.style.top='0';
+      box.appendChild(im); track.appendChild(box);
+    } else track.appendChild(im);
+    // 2x 이미지 → 화면 높이는 375 폭 기준으로 환산
+    // cut: 이 높이까지만 보이고 그 아래는 스크롤 안 됨
+    im.onload=()=>{ bottom=Math.max(bottom, it.y+(it.cut || im.naturalHeight*375/im.naturalWidth)); track.style.height=(bottom+L.pad)+'px'; };
   });
+  track.style.height = (L.h||867)+init+'px';
+  // 콘텐츠 안 핫스팟은 같이 스크롤 (시안 좌표 + 처음 스크롤 위치)
+  (HOTSPOTS[id]||[]).filter(h=>h.scroll).forEach(h=>track.appendChild(hotspot(h, init)));
+  el.appendChild(sc);
+  if(L.top.fade){ const f=document.createElement('div'); f.className='top-fade'; el.appendChild(f); }
+  const top = new Image(); top.src=L.top.src+V; top.className='ovl'; top.style.top='0'; el.appendChild(top);
+  const bot = new Image(); bot.src=L.bot.src+V; bot.className='ovl'; bot.style.top=L.bot.y+'px'; el.appendChild(bot);
+  (HOTSPOTS[id]||[]).filter(h=>!h.scroll && !h.tab).forEach(h=>el.appendChild(hotspot(h)));
+  if(L.sticky){
+    const S = L.sticky, tabs = document.createElement('div'); tabs.className='sticky';
+    Object.assign(tabs.style,{top:S.y+'px', height:S.h+'px'});
+    // 탭 줄은 좌우 스크롤 (Figma 탭 전체 폭 435 + 오른쪽 여백 16)
+    const tx = document.createElement('div'); tx.className='tabs-x';
+    const tin = document.createElement('div'); tin.className='tabs-in';
+    const im = new Image(); im.src=S.src+V; tin.appendChild(im);
+    (HOTSPOTS[id]||[]).filter(h=>h.tab).forEach(h=>tin.appendChild(hotspot(h, -S.y)));
+    tx.appendChild(tin); tabs.appendChild(tx);
+    enableDragX(tx);
+    requestAnimationFrame(()=>{ tx.scrollLeft = tabsX; }); tx.addEventListener('scroll', ()=>{ tabsX = tx.scrollLeft; }, {passive:true});
+    el.appendChild(tabs);
+    const stick = ()=>{ tabs.style.transform = `translateY(${-Math.min(sc.scrollTop, S.y-S.stick)}px)`; };
+    sc.addEventListener('scroll', stick, {passive:true});
+    requestAnimationFrame(stick);
+  }
+  // 맨 위로
+  el.appendChild(hotspot({x:316,y:L.toTop-21,w:42,h:42, fn:()=>sc.scrollTo({top:0,behavior:'smooth'})}));
+  enableDrag(sc);
+  const st = scrollTop!=null ? scrollTop : init;
+  requestAnimationFrame(()=>{ sc.scrollTop = st; });
+  sc.scrollTop = st;
   return el;
 }
 
+/* 탭 줄: 마우스로 좌우 끌기 */
+function enableDragX(el){
+  let sx=0, sl=0, down=false;
+  el.addEventListener('pointerdown',e=>{ if(e.pointerType!=='mouse') return; down=true; dragMoved=false; sx=e.clientX; sl=el.scrollLeft; e.stopPropagation(); });
+  addEventListener('pointermove',e=>{ if(!down) return; const dx=e.clientX-sx; if(Math.abs(dx)>5) dragMoved=true; if(dragMoved) el.scrollLeft = sl - dx/scaleNow(); });
+  addEventListener('pointerup',()=>{ if(!down) return; down=false; if(dragMoved) setTimeout(()=>dragMoved=false,0); });
+}
+/* 마우스로 끌어서 스크롤 (PC에서 폰처럼) */
+let dragMoved = false;
+let tabsX = 0; // 탭 줄 좌우 스크롤 위치 (탭 전환해도 유지)
+function enableDrag(sc){
+  let sy=0, st=0, down=false, v=0, lt=0, ly=0, raf=0;
+  sc.addEventListener('pointerdown',e=>{
+    if(e.pointerType!=='mouse') return;
+    down=true; dragMoved=false; sy=e.clientY; st=sc.scrollTop; ly=e.clientY; lt=performance.now(); v=0; cancelAnimationFrame(raf);
+  });
+  addEventListener('pointermove',e=>{
+    if(!down) return;
+    const dy=e.clientY-sy;
+    if(Math.abs(dy)>5) dragMoved=true;
+    if(dragMoved){ sc.scrollTop = st - dy/scaleNow(); const now=performance.now(); v=(e.clientY-ly)/Math.max(1,now-lt); ly=e.clientY; lt=now; }
+  });
+  addEventListener('pointerup',()=>{
+    if(!down) return; down=false;
+    if(dragMoved){ // 관성
+      let vel = -v*16/scaleNow();
+      const step=()=>{ if(Math.abs(vel)<.3) return; sc.scrollTop+=vel; vel*=.94; raf=requestAnimationFrame(step); };
+      step();
+      setTimeout(()=>dragMoved=false,0);
+    }
+  });
+}
+function scaleNow(){ const m=/scale\(([\d.]+)\)/.exec(phone.style.transform); return m?+m[1]:1; }
+function curScroll(){ const sc=current()&&current().querySelector('.scroller'); return sc?sc.scrollTop:null; }
+
+/* 마이 펼침/접힘: 검색바가 왼쪽 원으로 접히고, 프로필 원이 왼쪽으로 늘어나 멤버십 알약이 됨
+   좌표는 Figma navi_home 기준 (홈: 검색 16~254·프로필 262~306 / 마이: 검색 16~60·알약 68~308) */
+function morphMy(to){
+  if(busy) return; busy = true;
+  const isTab = TAB_IDS.includes(to);
+  let open;
+  if(isTab){ // 탭 화면: 홈 상태(마이 여부)만 바꾸고 같은 탭을 다시 그림
+    open = !homeState.endsWith('_my');
+    const nh = open ? homeState+'_my' : homeState.replace(/_my$/,'');
+    const hi = stack.lastIndexOf(homeState); if(hi>=0) stack[hi] = nh;
+    homeState = nh;
+  } else { open = to.endsWith('_my'); stack[stack.length-1] = to; homeState = to; }
+  const st = curScroll();
+  const prev = current();
+  const next = build(to, st);
+  phone.appendChild(next); prev.remove();
+  const gm = document.createElement('div'); gm.className='gm';
+  gm.innerHTML = `
+    <div class="gm-p gm-s" style="left:16px;width:238px">
+      <img class="gm-logo" src="${SC}gm_logo.png${V}" style="left:16px;top:10px;width:171px;height:24px">
+      <img src="${SC}gm_search.png${V}" style="right:8px;top:7px;width:30px;height:30px">
+    </div>
+    <div class="gm-p gm-m" style="left:262px;width:44px">
+      <img class="gm-av" src="${SC}gm_avatar.png${V}" style="left:5px;top:5px;width:34px;height:34px">
+      <img class="gm-txt" src="${SC}gm_mytext.png${V}" style="left:46px;top:2px;width:184px;height:40px">
+    </div>`;
+  const navOff = Math.min(st||0, 56); // 스크롤로 네비가 올라간 만큼
+  gm.style.top = (44-navOff)+'px'; gm.style.clipPath = `inset(${navOff}px 0 0 0)`;
+  next.appendChild(gm);
+  const dur = 560, ease = 'cubic-bezier(.32,.72,0,1)';
+  const k = (a,b)=> open ? [a,b] : [b,a];
+  const o = {duration:dur, easing:ease, fill:'forwards'};
+  const q = s=>gm.querySelector(s);
+  const anims = [
+    q('.gm-s').animate(k({width:'238px'},{width:'44px'}), o),
+    q('.gm-m').animate(k({left:'262px',width:'44px',backgroundColor:'rgba(255,255,255,.8)'},
+                         {left:'68px',width:'240px',backgroundColor:'rgba(255,255,255,1)'}), o),
+    q('.gm-av').animate(k({left:'5px'},{left:'6px'}), o),
+    // 검색 문구는 앞부분에 빠르게 사라지고, 멤버십 문구는 뒤에 나타남
+    q('.gm-logo').animate(open ? [{opacity:1},{opacity:0,offset:.35},{opacity:0}] : [{opacity:0},{opacity:0,offset:.3},{opacity:1}], {duration:dur, easing:'linear', fill:'forwards'}),
+    q('.gm-txt').animate(open ? [{opacity:0},{opacity:0,offset:.3},{opacity:1}] : [{opacity:1},{opacity:0,offset:.45},{opacity:0}], {duration:dur, easing:'linear', fill:'forwards'}),
+  ];
+  let done=false;
+  const end=()=>{ if(done) return; done=true; gm.remove(); busy=false; sync(); };
+  anims[0].finished.then(end); setTimeout(end, dur+200);
+}
+
+/* 11번가 로고 → 홈: 홈이면 맨 위로, 멤버십 탭이면 홈 탭으로, 그 밖에는 홈으로 돌아감 */
+function goHome(){
+  if(busy) return;
+  const top = stack[stack.length-1];
+  if(/^home/.test(top)){ const sc=current().querySelector('.scroller'); if(sc) sc.scrollTo({top:0,behavior:'smooth'}); return; }
+  if(TAB_IDS.includes(top)) return tabSwitch('home');
+  if(stack.length>=2 && /^home/.test(stack[stack.length-2])) return back();
+  reset(homeState);
+}
 function act(h){
+  if(h.logo) return goHome();
+  if(h.tabTo) return tabSwitch(h.tabTo);
+  if(h.morphTab) return morphMy(stack[stack.length-1]);
+  if(h.fn) return h.fn();
   if(h.back) return back();
   if(h.home) return reset(homeState);
+  if(h.morph) return morphMy(h.to);
   if(h.swap) return swap(h.to);
   go(h.to);
 }
@@ -208,36 +467,153 @@ function onEnd(el, fn, ms=480){
   setTimeout(()=>f(),ms);
 }
 
-function transition(nextId, enterCls, leaveCls){
+const memo = []; // 화면별 스크롤 위치 (뒤로 왔을 때 복원)
+function transition(nextId, enterCls, leaveCls, scrollTop){
   busy = true;
   const prev = current();
-  const next = build(nextId);
+  const next = build(nextId, scrollTop);
   phone.appendChild(next);
   next.classList.add(enterCls);
   if(prev && leaveCls) prev.classList.add(leaveCls);
   onEnd(next, ()=>{ phone.querySelectorAll('.screen').forEach(s=>{ if(s!==next) s.remove(); }); next.className='screen'; busy=false; sync(); });
 }
 
+/* 홈(쿠폰 사용 전) ↔ PDP 공유 전환
+   - 보던 세럼 썸네일(32,296 76x76 r8)이 PDP 대표 이미지(16,110 300x300 r12)로 커짐
+   - GNB: 홈 검색바(또는 마이 알약)가 PDP 로고 알약(68~248)으로 변하고, 왼쪽에 뒤로 버튼, 프로필은 사라짐 */
+function heroTransition(open){
+  busy = true;
+  const dur = open ? 620 : 540, ease = 'cubic-bezier(.32,.72,0,1)';
+  let homeEl, pdpEl, homeId;
+  if(open){
+    homeId = stack[stack.length-1];
+    memo[stack.length-1] = curScroll();
+    homeEl = current();
+    stack.push('pdp');
+    pdpEl = build('pdp'); phone.appendChild(pdpEl);
+  } else {
+    pdpEl = current();
+    stack.pop();
+    homeId = stack[stack.length-1];
+    homeEl = build(homeId, memo[stack.length-1]); phone.insertBefore(homeEl, pdpEl);
+    const hsc = homeEl.querySelector('.scroller'); if(hsc) hsc.scrollTop = memo[stack.length-1]||0;
+  }
+  const my = homeId.endsWith('_my');
+  const hScroll = homeEl.querySelector('.scroller').scrollTop;
+  const pScroll = pdpEl.querySelector('.scroller').scrollTop;
+  const navOff = Math.min(hScroll, 56); // 홈 네비가 스크롤로 올라간 정도
+  // 원래 자리 가리기 (중복 이미지 방지)
+  const mask = (el, x, y, w, h, r)=>{ const m=document.createElement('div'); m.className='tr-mask';
+    Object.assign(m.style,{left:x+'px',top:y+'px',width:w+'px',height:h+'px',borderRadius:r+'px'}); el.querySelector('.track').appendChild(m); return m; };
+  const m1 = mask(homeEl, 32, 296, 76, 76, 8);
+  const m2 = mask(pdpEl, 16, 110, 300, 300, 12);
+  // 확대되는 상품 이미지
+  const A = {left:'32px', top:(296-hScroll)+'px', width:'76px', height:'76px', borderRadius:'8px'};
+  const B = {left:'16px', top:(110-pScroll)+'px', width:'300px', height:'300px', borderRadius:'12px'};
+  const hero = document.createElement('div'); hero.className='hero';
+  hero.innerHTML = `<img src="${SC}tr_thumb.png${V}"><img class="h2" src="${SC}tr_hero.png${V}">`;
+  Object.assign(hero.style, open ? A : B);
+  phone.appendChild(hero);
+  // GNB 연결 레이어
+  const tg = document.createElement('div'); tg.className='tg';
+  tg.innerHTML = `
+    <div class="bg b1" style="background-image:url(${SC}gm_bg.png${V})"></div>
+    <div class="bg b2" style="background-image:url(${SC}tr_bg.png${V})"></div>
+    <img src="${SC}tr_cart.png${V}" style="position:absolute;left:310px;top:0;width:65px;height:56px">
+    <div class="gm-p t-left" style="left:16px;width:44px">
+      ${my ? `<img class="t-sic" src="${SC}gm_search.png${V}" style="left:7px;top:7px;width:30px;height:30px">` : ''}
+      <img class="t-back" src="${SC}tr_back.png${V}" style="left:7px;top:7px;width:30px;height:30px">
+    </div>
+    ${my ? '' : `<div class="gm-p t-av" style="left:262px;width:44px"><img src="${SC}gm_avatar.png${V}" style="left:5px;top:5px;width:34px;height:34px"></div>`}
+    <div class="gm-p t-pill" style="left:${my?68:16}px;width:${my?240:238}px">
+      ${my ? `<img class="t-from" src="${SC}gm_mytext.png${V}" style="left:46px;top:2px;width:184px;height:40px">`
+           : `<img class="t-from" src="${SC}gm_logo.png${V}" style="left:16px;top:10px;width:171px;height:24px">`}
+      ${my ? `<img class="t-from2" src="${SC}gm_avatar.png${V}" style="left:6px;top:5px;width:34px;height:34px">` : ''}
+      <img class="t-to" src="${SC}tr_pill.png${V}" style="left:8px;top:5px;width:164px;height:34px">
+    </div>`;
+  phone.appendChild(tg);
+  // 전환 동안 상태바는 그대로 (두 화면이 페이드되며 흐려지지 않게)
+  const sb = new Image(); sb.src=SC+'tr_status.png'+V; sb.className='ovl'; Object.assign(sb.style,{top:'0',zIndex:22}); phone.appendChild(sb);
+  const q = s=>tg.querySelector(s);
+  // open 기준 키프레임 → 닫을 땐 뒤집기
+  const flip = f => f.map(k=>({...k, offset: k.offset!=null ? 1-k.offset : undefined})).reverse();
+  const run = (el, frames, opt={}) => el && el.animate(open ? frames : flip(frames), {duration:dur, easing:ease, fill:'forwards', ...opt});
+  const lin = {easing:'linear'};
+  const anims = [
+    run(hero, [A, B]),
+    run(hero.querySelector('.h2'), [{opacity:0},{opacity:0,offset:.12},{opacity:1,offset:.6},{opacity:1}], lin),
+    // 겹쳐 보이지 않게: 홈이 먼저 빠지고 → PDP가 들어옴 (그동안 이미지·GNB는 계속 이어짐)
+    run(homeEl, [{opacity:1},{opacity:0,offset:.32},{opacity:0}], lin),
+    run(pdpEl, [{opacity:0},{opacity:0,offset:.3},{opacity:1,offset:.68},{opacity:1}], lin),
+    run(q('.b2'), [{opacity:0},{opacity:1}], lin),
+    run(tg, [{top:(44-navOff)+'px', clipPath:`inset(${navOff}px 0 0 0)`},{top:'44px', clipPath:'inset(0px 0 0 0)'}]),
+    run(q('.t-pill'), [{left:(my?68:16)+'px', width:(my?240:238)+'px', backgroundColor:`rgba(255,255,255,${my?1:.8})`},
+                       {left:'68px', width:'180.5px', backgroundColor:'rgba(255,255,255,.8)'}]),
+    run(q('.t-from'), [{opacity:1},{opacity:0,offset:.35},{opacity:0}], lin),
+    run(q('.t-from2'), [{opacity:1},{opacity:0,offset:.35},{opacity:0}], lin),
+    run(q('.t-to'), [{opacity:0},{opacity:0,offset:.15},{opacity:1,offset:.55},{opacity:1}], lin),
+    my ? run(q('.t-sic'), [{opacity:1},{opacity:0,offset:.4},{opacity:0}], lin)
+       : run(q('.t-left'), [{opacity:0, transform:'scale(.4)'},{opacity:1, transform:'scale(1)'}]),
+    run(q('.t-back'), [{opacity:0},{opacity:0,offset:my?.2:.1},{opacity:1,offset:.55},{opacity:1}], lin),
+    run(q('.t-av'), [{opacity:1, transform:'scale(1)'},{opacity:0, transform:'scale(.5)', offset:.45},{opacity:0, transform:'scale(.5)'}]),
+  ].filter(Boolean);
+  let done=false;
+  const end=()=>{ if(done) return; done=true;
+    hero.remove(); tg.remove(); sb.remove(); m1.remove(); m2.remove();
+    if(open){ homeEl.remove(); pdpEl.getAnimations().forEach(a=>a.cancel()); }
+    else { pdpEl.remove(); homeEl.getAnimations().forEach(a=>a.cancel()); }
+    busy=false; sync(); };
+  anims[0].finished.then(end); setTimeout(end, dur+250);
+}
+
+/* 홈 ↔ 멤버십 전용: 탭 전환. GNB·탭 자리는 그대로 두고(탭 선택만 바뀜) 아래 콘텐츠만 교체 */
+function tabSwitch(target){
+  if(busy) return;
+  const top = stack[stack.length-1];
+  const onHome = /^home/.test(top);
+  if(target==='home' ? onHome : target===top) return; // 이미 그 탭
+  busy = true;
+  const s = curScroll()||0;
+  let next, st;
+  if(target==='home'){ stack.pop(); st = memo[stack.length-1]||0; next = build(stack[stack.length-1], st); }
+  else {
+    if(onHome){ memo[stack.length-1] = s; stack.push(target); } else stack[stack.length-1] = target; // 탭끼리는 교체
+    st = Math.min(s, 60); next = build(target, st);
+  }
+  phone.appendChild(next);
+  const sc = next.querySelector('.scroller'); if(sc) sc.scrollTop = st;
+  // 화면 전체는 페이드(같은 GNB라 겹쳐도 그대로 보임), 콘텐츠만 살짝 올라오며 바뀜 (네비 이미지 = 트랙 첫 번째는 제외)
+  const a = next.animate([{opacity:0},{opacity:1}], {duration:220, easing:'ease-out'});
+  [...next.querySelectorAll('.track > img, .track > .cutbox')].slice(1).forEach(im=>im.animate([{transform:'translateY(14px)'},{transform:'none'}], {duration:320, easing:'cubic-bezier(.32,.72,0,1)'}));
+  let done=false; const end=()=>{ if(done) return; done=true; phone.querySelectorAll('.screen').forEach(x=>{ if(x!==next) x.remove(); }); busy=false; sync(); };
+  a.finished.then(end); setTimeout(end, 450);
+}
+
 function go(id){
   if(busy) return;
+  if(id==='pdp' && /^home_coupon/.test(stack[stack.length-1])) return heroTransition(true);
+  if(TAB_IDS.includes(id) && (/^home/.test(stack[stack.length-1]) || TAB_IDS.includes(stack[stack.length-1]))) return tabSwitch(id);
   const modal = SCREENS[id].modal;
+  memo[stack.length-1] = curScroll();
   stack.push(id);
   transition(id, modal?'enter-up':'enter-push', modal?null:'leave-push');
 }
-function swap(id){ // 같은 자리에서 상태만 바뀜
+function swap(id){ // 같은 자리에서 상태만 바뀜 (스크롤 위치 유지)
   if(busy) return;
   stack[stack.length-1] = id;
   if(HOME_STATES.includes(id)) homeState = id;
-  transition(id,'enter-fade',null);
+  transition(id,'enter-fade',null, curScroll());
 }
 function back(){
   if(stack.length<2 || busy) return;
+  if(/^pdp/.test(stack[stack.length-1]) && /^home_coupon/.test(stack[stack.length-2])) return heroTransition(false);
+  if(TAB_IDS.includes(stack[stack.length-1]) && /^home/.test(stack[stack.length-2])) return tabSwitch('home');
   const leaving = stack.pop();
   const prevId = stack[stack.length-1];
   const modal = SCREENS[leaving].modal;
   busy = true;
   const cur = current();
-  const under = build(prevId);
+  const under = build(prevId, memo[stack.length-1]);
   phone.insertBefore(under, cur);
   if(!modal) under.classList.add('enter-pop');
   cur.classList.add(modal?'leave-down':'leave-pop');
@@ -254,14 +630,14 @@ function reset(id){
 
 /* side panel */
 const statesEl = document.getElementById('states');
-const STATE_LABEL = {home:'기본',home_my:'멤버십 마이',home_coupon:'쿠폰 사용 전',home_active:'활동성 높음'};
-HOME_STATES.forEach(id=>{
+const STATE_LABEL = {home_coupon:'쿠폰 사용전 유저',home_active:'활동성 높은 유저'};
+Object.keys(STATE_LABEL).forEach(id=>{
   const b=document.createElement('button'); b.className='chip'; b.textContent=STATE_LABEL[id]; b.dataset.id=id;
   b.onclick=()=>reset(id); statesEl.appendChild(b);
 });
 const flowEl = document.getElementById('flow');
 const FLOW = [
-  ['home_coupon','홈 · 쿠폰 사용 전 유저'],['pdp','PDP'],['pdp_price','PDP · 가격 펼침'],
+  ['home_coupon','홈 (쿠폰 사용 전)'],['pdp','PDP'],['pdp_price','PDP · 가격 펼침'],
   ['order','주문 결제'],['coupon','쿠폰 적용'],['done','주문 완료'],
   ['home_active','홈 · 활동성 높은 유저'],['membership','멤버십 전용'],['search','검색'],['mart','마트'],
 ];
@@ -273,7 +649,7 @@ FLOW.forEach(([id,label])=>{
 const PATHS = {
   pdp:['home_coupon','pdp'], pdp_price:['home_coupon','pdp_price'],
   order:['home_coupon','pdp','order'], coupon:['home_coupon','pdp','order','coupon'], done:['home_coupon','pdp','order','done'],
-  membership:['home_active','membership'], search:['home_active','membership','search'], mart:['home_active','mart'],
+  membership:['home_coupon','membership'], search:['home_coupon','membership','search'], mart:['home_coupon','mart'],
 };
 function jump(id){
   if(HOME_STATES.includes(id)) return reset(id);
@@ -290,7 +666,7 @@ function jump(id){
 }
 function sync(){
   const top = stack[stack.length-1];
-  statesEl.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on', c.dataset.id===homeState && HOME_STATES.includes(top)));
+  statesEl.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on', c.dataset.id===homeState.replace(/_my$/,'').replace(/^home$/,'home_coupon') && HOME_STATES.includes(top)));
   flowEl.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.id===top));
   try{ history.replaceState(null,'','#'+top); }catch(e){}
 }
@@ -316,7 +692,7 @@ function fit(){
 addEventListener('resize',fit); fit();
 
 const start = location.hash.slice(1);
-if(SCREENS[start]) jump(start); else reset('home');
+if(SCREENS[start]) jump(start); else reset('home_coupon'); // 시작 화면 = 쿠폰 사용 전 홈
 </script>
 </body>
 </html>

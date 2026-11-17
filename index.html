@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>유저 활동성 강화 프로토타입</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root{
+    --bg:#EEEFF1; --panel:#fff; --ink:#111; --sub:#6B6E75; --line:#E3E4E8;
+    --accent:#FF0038; --phone-w:375px; --phone-h:867px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:Pretendard,-apple-system,system-ui,sans-serif;
+    display:flex;align-items:center;justify-content:center;gap:48px;overflow:hidden;-webkit-font-smoothing:antialiased}
+
+  /* side panel */
+  .side{width:260px;display:flex;flex-direction:column;gap:22px}
+  .side h1{font-size:20px;font-weight:700;letter-spacing:-.4px;line-height:1.35}
+  .side .desc{font-size:13px;color:var(--sub);line-height:1.5;margin-top:6px}
+  .group h2{font-size:12px;font-weight:600;color:var(--sub);margin-bottom:8px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:99px;padding:7px 12px;font:inherit;font-size:13px;color:var(--ink);cursor:pointer;transition:.15s}
+  .chip:hover{border-color:#bbb}
+  .chip.on{background:var(--ink);border-color:var(--ink);color:#fff}
+  .flow{list-style:none;display:flex;flex-direction:column;gap:2px}
+  .flow button{width:100%;text-align:left;border:0;background:none;font:inherit;font-size:13px;color:var(--sub);padding:6px 10px;border-radius:8px;cursor:pointer}
+  .flow button:hover{background:#e4e5e8}
+  .flow button.on{color:var(--ink);font-weight:600;background:#fff}
+  .toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--sub);cursor:pointer;user-select:none}
+  .toggle input{accent-color:#333}
+
+  /* phone */
+  .stage{position:relative;flex:none}
+  .phone{position:relative;width:var(--phone-w);height:var(--phone-h);background:#fff;border-radius:44px;overflow:hidden;
+    box-shadow:0 0 0 10px #1b1b1d,0 0 0 11px #3a3a3d,0 30px 60px rgba(0,0,0,.18);transform-origin:center center}
+  .screen{position:absolute;inset:0;background:#fff;will-change:transform}
+  .screen img{display:block;width:375px;height:auto;user-select:none;-webkit-user-drag:none}
+  .hs{position:absolute;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  /* 클릭 유도 표시: 무채색, 은은하게 */
+  .hs .ring{position:absolute;inset:0;border-radius:999px;
+    background:rgba(40,40,40,.07);box-shadow:inset 0 0 0 1.5px rgba(40,40,40,.32);
+    opacity:0;transition:opacity .3s}
+  .hs .ring::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:0 0 0 1.5px rgba(40,40,40,.22);
+    animation:pulse 1.8s ease-out infinite}
+  @keyframes pulse{0%{transform:scale(1);opacity:.9}100%{transform:scale(1.18);opacity:0}}
+  .show-hints .hs.hint .ring{opacity:1}
+  .hs:active .ring{background:rgba(40,40,40,.14)}
+
+  /* transitions */
+  .enter-push{animation:pushIn .38s cubic-bezier(.32,.72,0,1) both}
+  .leave-push{animation:pushOut .38s cubic-bezier(.32,.72,0,1) both}
+  .enter-pop{animation:popIn .38s cubic-bezier(.32,.72,0,1) both}
+  .leave-pop{animation:popOut .38s cubic-bezier(.32,.72,0,1) both}
+  .enter-up{animation:upIn .42s cubic-bezier(.32,.72,0,1) both}
+  .leave-down{animation:downOut .36s cubic-bezier(.32,.72,0,1) both}
+  .enter-fade{animation:fadeIn .28s ease both}
+  @keyframes pushIn{from{transform:translateX(100%)}to{transform:none}}
+  @keyframes pushOut{to{transform:translateX(-28%);filter:brightness(.92)}}
+  @keyframes popIn{from{transform:translateX(-28%);filter:brightness(.92)}to{transform:none;filter:none}}
+  @keyframes popOut{to{transform:translateX(100%)}}
+  @keyframes upIn{from{transform:translateY(100%)}to{transform:none}}
+  @keyframes downOut{to{transform:translateY(100%)}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+  @media (max-width:760px){
+    body{gap:0;background:#fff}
+    .side{display:none}
+    .phone{border-radius:0;box-shadow:none}
+  }
+</style>
+</head>
+<body>
+<aside class="side">
+  <div>
+    <h1>유저 활동성 강화<br>프로토타입</h1>
+    <p class="desc">회색 동그라미 영역을 눌러 다음 화면으로 넘어가요. ← 키나 화면의 뒤로·닫기로 돌아갈 수 있어요.</p>
+  </div>
+  <div class="group">
+    <h2>홈 · 유저 상태</h2>
+    <div class="chips" id="states"></div>
+  </div>
+  <div class="group">
+    <h2>화면</h2>
+    <ul class="flow" id="flow"></ul>
+  </div>
+  <label class="toggle"><input type="checkbox" id="hintToggle" checked> 클릭 영역 표시 (H)</label>
+</aside>
+
+<div class="stage" id="stage">
+  <div class="phone show-hints" id="phone"></div>
+</div>
+
+<script>
+/* 좌표는 375 기준 Figma 화면 좌표 */
+const SCREENS = {
+  home:        {img:'home',        title:'홈'},
+  home_my:     {img:'home_my',     title:'홈 · 상단 멤버십 마이'},
+  home_coupon: {img:'home_coupon', title:'홈 · 쿠폰 사용 전인 유저'},
+  home_active: {img:'home_active', title:'홈 · 활동성 높은 유저'},
+  pdp:         {img:'pdp',         title:'PDP'},
+  pdp_price:   {img:'pdp_price',   title:'PDP · 가격 펼침'},
+  order:       {img:'order',       title:'주문 결제', modal:true},
+  coupon:      {img:'coupon',      title:'쿠폰 적용', modal:true},
+  done:        {img:'done',        title:'주문 완료', modal:true},
+  membership:  {img:'membership',  title:'멤버십 전용'},
+  search:      {img:'search',      title:'검색'},
+  mart:        {img:'mart',        title:'마트'},
+};
+const HOME_STATES = ['home','home_my','home_coupon','home_active'];
+
+// 홈 공통 탭(멤버십전용·마트+)은 클릭 가능, 유도 표시는 각 화면의 주요 다음 단계에만
+const homeTabs = [
+  {x:212,y:110,w:80,h:34, to:'membership'},
+  {x:300,y:110,w:52,h:34, to:'mart'},
+];
+const HOTSPOTS = {
+  home: [
+    {x:262,y:49,w:44,h:44, to:'home_my', hint:true, swap:true},
+    ...homeTabs,
+  ],
+  home_my: [
+    {x:68,y:50,w:242,h:42, to:'home', swap:true},
+    ...homeTabs,
+  ],
+  home_coupon: [
+    {x:28,y:292,w:320,h:86, to:'pdp', hint:true},
+    ...homeTabs,
+  ],
+  home_active: [
+    {x:212,y:110,w:80,h:34, to:'membership', hint:true},
+    {x:300,y:110,w:52,h:34, to:'mart', hint:true},
+  ],
+  pdp: [
+    {x:16,y:49,w:44,h:44, back:true},
+    {x:166,y:582,w:22,h:22, to:'pdp_price', hint:true, swap:true},
+    {x:222,y:801,w:132,h:50, to:'order', hint:true},
+  ],
+  pdp_price: [
+    {x:16,y:49,w:44,h:44, back:true},
+    {x:164,y:582,w:22,h:22, to:'pdp', swap:true},
+    {x:222,y:801,w:132,h:50, to:'order', hint:true},
+  ],
+  order: [
+    {x:315,y:50,w:44,h:44, back:true},
+    {x:252,y:180,w:92,h:36, to:'coupon', hint:true},
+    {x:16,y:612,w:343,h:60, to:'done', hint:true},
+  ],
+  coupon: [
+    {x:315,y:50,w:44,h:44, back:true},
+    {x:16,y:721,w:343,h:60, back:true, hint:true},
+  ],
+  done: [
+    {x:315,y:50,w:44,h:44, home:true, hint:true},
+  ],
+  membership: [
+    {x:12,y:110,w:44,h:34, back:true},
+    {x:210,y:50,w:42,h:42, to:'search', hint:true},
+    {x:300,y:110,w:56,h:34, to:'mart'},
+  ],
+  search: [
+    {x:15,y:49,w:44,h:44, back:true, hint:true},
+  ],
+  mart: [
+    {x:144,y:110,w:82,h:34, to:'membership'},
+  ],
+};
+
+const phone = document.getElementById('phone');
+let stack = ['home'];
+let homeState = 'home';
+let busy = false;
+
+// preload
+Object.values(SCREENS).forEach(s=>{const i=new Image();i.src=`img/1x/${s.img}.png`;});
+
+function build(id){
+  const s = SCREENS[id];
+  const el = document.createElement('div');
+  el.className = 'screen'; el.dataset.id = id;
+  el.innerHTML = `<img src="img/1x/${s.img}.png" alt="${s.title}">`;
+  (HOTSPOTS[id]||[]).forEach(h=>{
+    const b = document.createElement('div');
+    b.className = 'hs' + (h.hint?' hint':'');
+    Object.assign(b.style,{left:h.x+'px',top:h.y+'px',width:h.w+'px',height:h.h+'px'});
+    b.innerHTML = '<span class="ring"></span>';
+    b.addEventListener('click',()=>act(h));
+    el.appendChild(b);
+  });
+  return el;
+}
+
+function act(h){
+  if(h.back) return back();
+  if(h.home) return reset(homeState);
+  if(h.swap) return swap(h.to);
+  go(h.to);
+}
+
+function current(){ return phone.querySelector('.screen:last-child'); }
+
+// 애니메이션 끝 처리 (탭이 백그라운드라 이벤트가 안 와도 타이머로 마무리)
+function onEnd(el, fn, ms=480){
+  let fired=false;
+  const f=e=>{ if(e && e.target!==el) return; if(fired) return; fired=true; el.removeEventListener('animationend',f); fn(); };
+  el.addEventListener('animationend',f);
+  setTimeout(()=>f(),ms);
+}
+
+function transition(nextId, enterCls, leaveCls){
+  busy = true;
+  const prev = current();
+  const next = build(nextId);
+  phone.appendChild(next);
+  next.classList.add(enterCls);
+  if(prev && leaveCls) prev.classList.add(leaveCls);
+  onEnd(next, ()=>{ phone.querySelectorAll('.screen').forEach(s=>{ if(s!==next) s.remove(); }); next.className='screen'; busy=false; sync(); });
+}
+
+function go(id){
+  if(busy) return;
+  const modal = SCREENS[id].modal;
+  stack.push(id);
+  transition(id, modal?'enter-up':'enter-push', modal?null:'leave-push');
+}
+function swap(id){ // 같은 자리에서 상태만 바뀜
+  if(busy) return;
+  stack[stack.length-1] = id;
+  if(HOME_STATES.includes(id)) homeState = id;
+  transition(id,'enter-fade',null);
+}
+function back(){
+  if(stack.length<2 || busy) return;
+  const leaving = stack.pop();
+  const prevId = stack[stack.length-1];
+  const modal = SCREENS[leaving].modal;
+  busy = true;
+  const cur = current();
+  const under = build(prevId);
+  phone.insertBefore(under, cur);
+  if(!modal) under.classList.add('enter-pop');
+  cur.classList.add(modal?'leave-down':'leave-pop');
+  onEnd(cur, ()=>{ phone.querySelectorAll('.screen').forEach(s=>{ if(s!==under) s.remove(); }); under.className='screen'; busy=false; sync(); });
+}
+function reset(id){
+  busy = false;
+  stack = [id];
+  if(HOME_STATES.includes(id)) homeState = id;
+  phone.innerHTML=''; const el=build(id); el.classList.add('enter-fade'); phone.appendChild(el);
+  onEnd(el, ()=>el.className='screen', 320);
+  sync();
+}
+
+/* side panel */
+const statesEl = document.getElementById('states');
+const STATE_LABEL = {home:'기본',home_my:'멤버십 마이',home_coupon:'쿠폰 사용 전',home_active:'활동성 높음'};
+HOME_STATES.forEach(id=>{
+  const b=document.createElement('button'); b.className='chip'; b.textContent=STATE_LABEL[id]; b.dataset.id=id;
+  b.onclick=()=>reset(id); statesEl.appendChild(b);
+});
+const flowEl = document.getElementById('flow');
+const FLOW = [
+  ['home_coupon','홈 · 쿠폰 사용 전 유저'],['pdp','PDP'],['pdp_price','PDP · 가격 펼침'],
+  ['order','주문 결제'],['coupon','쿠폰 적용'],['done','주문 완료'],
+  ['home_active','홈 · 활동성 높은 유저'],['membership','멤버십 전용'],['search','검색'],['mart','마트'],
+];
+FLOW.forEach(([id,label])=>{
+  const li=document.createElement('li'); const b=document.createElement('button');
+  b.textContent=label; b.dataset.id=id; b.onclick=()=>jump(id); li.appendChild(b); flowEl.appendChild(li);
+});
+// 화면 목록에서 바로 이동할 때 그럴듯한 뒤로 경로를 만들어 둠
+const PATHS = {
+  pdp:['home_coupon','pdp'], pdp_price:['home_coupon','pdp_price'],
+  order:['home_coupon','pdp','order'], coupon:['home_coupon','pdp','order','coupon'], done:['home_coupon','pdp','order','done'],
+  membership:['home_active','membership'], search:['home_active','membership','search'], mart:['home_active','mart'],
+};
+function jump(id){
+  if(HOME_STATES.includes(id)) return reset(id);
+  const path = PATHS[id]||[id];
+  busy = false;
+  homeState = path[0];
+  stack = path.slice();
+  phone.innerHTML='';
+  // 모달 화면은 아래 화면 위에 덮기
+  if(SCREENS[id].modal){ phone.appendChild(build(path[path.length-2])); }
+  const el=build(id); el.classList.add('enter-fade'); phone.appendChild(el);
+  onEnd(el, ()=>{ phone.querySelectorAll('.screen').forEach(s=>{ if(s!==el) s.remove(); }); el.className='screen'; }, 320);
+  sync();
+}
+function sync(){
+  const top = stack[stack.length-1];
+  statesEl.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on', c.dataset.id===homeState && HOME_STATES.includes(top)));
+  flowEl.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.id===top));
+  try{ history.replaceState(null,'','#'+top); }catch(e){}
+}
+
+/* hints */
+const hintToggle=document.getElementById('hintToggle');
+hintToggle.onchange=()=>phone.classList.toggle('show-hints',hintToggle.checked);
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowLeft'||e.key==='Backspace') back();
+  if(e.key==='h'||e.key==='H'){hintToggle.checked=!hintToggle.checked;hintToggle.onchange();}
+});
+
+/* fit to viewport */
+function fit(){
+  const vh=innerHeight, vw=innerWidth;
+  const mobile = vw<=760;
+  const s = mobile ? Math.min(vw/375, vh/867) : Math.min(1,(vh-56)/887);
+  phone.style.transform=`scale(${s})`;
+  const st=document.getElementById('stage');
+  st.style.width=375*s+'px'; st.style.height=867*s+'px';
+  phone.style.position='absolute'; phone.style.left=(375*s-375)/2+'px'; phone.style.top=(867*s-867)/2+'px';
+}
+addEventListener('resize',fit); fit();
+
+const start = location.hash.slice(1);
+if(SCREENS[start]) jump(start); else reset('home');
+</script>
+</body>
+</html>

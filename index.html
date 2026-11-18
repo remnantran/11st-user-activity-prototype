@@ -143,12 +143,12 @@ const HOME_STATES = ['home','home_my','home_coupon','home_coupon_my','home_activ
 
 /* 스크롤 화면 구성 (y = 스크롤 0일 때 화면 좌표)
    top: 고정 GNB, items: 스크롤 콘텐츠, bot: 고정 하단(탭바·구매바), init: 처음 스크롤 위치 */
-const V = '?v=14'; // 이미지 바꿀 때 숫자 올리기 (브라우저 캐시 무효화)
+const V = '?v=15'; // 이미지 바꿀 때 숫자 올리기 (브라우저 캐시 무효화)
 const SC = 'img/hd/'; // 모든 이미지는 2x(레티나) — 화면에는 375 폭으로 표시
 // 홈: 상태바만 고정, 네비(검색·프로필·장바구니)는 스크롤과 함께 올라가고, 탭은 상단(44)에 스티키(배경 없음)
 const homeLayout = (n, items) => ({
-  // 홈 콘텐츠는 LIVE11 직전(콘텐츠 y1393)까지만 보이게
-  top:{src:SC+'status_clear.png'}, items:[{src:SC+n+'_head.png', y:0}, ...items.map(it=>/_c\.png$/.test(it.src) ? {...it, cut:1393} : it)], pad:110, // 상태바 배경 없음(글자만)
+  // 홈 콘텐츠: 개인화 추천×게임형 구성(다시 살 때 → 또래 랭킹 → 쇼핑 미션 → 장바구니 짝꿍 → 밸런스게임 → 라인배너) 끝까지 노출
+  top:{src:SC+'status_clear.png'}, items:[{src:SC+n+'_head.png', y:0}, ...items], pad:110, // 상태바 배경 없음(글자만)
   sticky:{src:SC+'home_tabs.png', y:104, stick:44, h:50},
   bot:{src:SC+'tab_home.png', y:693}, toTop:756,
 });
